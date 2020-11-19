@@ -48,7 +48,7 @@ async function getCurrentCidrIp() {
 }
 
 async function getCurrentIp() {
-  const response = await fetch('https://v4.ifconfig.co/ip');
+  const response = await fetch('https://checkip.amazonaws.com/');
   return (await response.text()).trim();
 }
 

@@ -80,7 +80,7 @@ async function updateIp(currentCidrIp, newIp) {
   const currentCidrIp = await getCurrentCidrIp();
   const currentIp = await getCurrentIp();
 
-  if (true || currentCidrIp !== `${currentIp}/32`) {
+  if (currentCidrIp !== `${currentIp}/32`) {
     await updateIp(currentCidrIp, currentIp);
     console.log('IP Updated');
   }

@@ -4,7 +4,6 @@ const fs = require('fs');
 const { exec } = require("child_process");
 const fetch = require('node-fetch');
 const AWS = require('aws-sdk');
-const ec2 = new AWS.EC2();
 
 // .env file is required
 if (!fs.existsSync(path.join(__dirname, '/.env'))) {
@@ -21,6 +20,8 @@ AWS.config.update({
 AWS.config.apiVersions = {
   ec2: '2016-11-15',
 };
+
+const ec2 = new AWS.EC2();
 
 async function getCurrentCidrIp() {
   const result = await ec2.describeSecurityGroups({

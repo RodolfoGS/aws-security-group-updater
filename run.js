@@ -23,28 +23,31 @@ AWS.config.apiVersions = {
 
 const ec2 = new AWS.EC2();
 
-async function getCurrentCidrIp() {
+async function getCurrentValues() {
   const result = await ec2.describeSecurityGroups({
     GroupNames: [process.env.AWS_SG_NAME],
   }).promise();
 
-  for (const i in result.SecurityGroups) {
-    const securityGroup = result.SecurityGroups[i];
+  const response = [];
 
-    for (const j in securityGroup.IpPermissions) {
-      const IpPermission = securityGroup.IpPermissions[j];
-
-      for (const k in IpPermission.IpRanges) {
-        const IpRange = IpPermission.IpRanges[k];
-
-        if (IpRange.Description === process.env.AWS_SG_DESCRIPTION) {
-          return IpRange.CidrIp;
+  result.SecurityGroups.map(securityGroup => {
+    securityGroup.IpPermissions.map(ipPermission => {
+      ipPermission.IpRanges.map(ipRange => {
+        if (new RegExp(process.env.AWS_SG_DESCRIPTION).test(ipRange.Description)) {
+          response.push({
+            GroupName: process.env.AWS_SG_NAME,
+            CidrIp: ipRange.CidrIp,
+            IpProtocol: ipPermission.IpProtocol,
+            FromPort: ipPermission.FromPort,
+            ToPort: ipPermission.ToPort,
+            Description: ipRange.Description,
+          });
         }
-      }
-    }
-  }
+      });
+    });
+  });
 
-  return null;
+  return response;
 }
 
 async function getCurrentIp() {
@@ -52,37 +55,44 @@ async function getCurrentIp() {
   return (await response.text()).trim();
 }
 
-async function updateIp(currentCidrIp, newIp) {
+async function updateIp(currentValue, newIp) {
   // remove old entry
   await ec2.revokeSecurityGroupIngress({
     GroupName: process.env.AWS_SG_NAME,
-    CidrIp: currentCidrIp,
-    IpProtocol: 'tcp',
-    FromPort: 0,
-    ToPort: 65535,
+    CidrIp: currentValue.CidrIp,
+    IpProtocol: currentValue.IpProtocol,
+    FromPort: currentValue.FromPort,
+    ToPort: currentValue.ToPort,
   }).promise();
 
   // create new entry
   await ec2.authorizeSecurityGroupIngress({
     GroupName: process.env.AWS_SG_NAME,
     IpPermissions: [{
-      FromPort: 0,
-      ToPort: 65535,
-      IpProtocol: 'tcp',
+      FromPort: currentValue.FromPort,
+      ToPort: currentValue.ToPort,
+      IpProtocol: currentValue.IpProtocol,
       IpRanges: [{
         CidrIp: `${newIp}/32`,
-        Description: process.env.AWS_SG_DESCRIPTION,
+        Description: currentValue.Description,
       }],
     }],
   }).promise();
 }
 
 (async () => {
-  const currentCidrIp = await getCurrentCidrIp();
+  const currentValues = await getCurrentValues();
   const currentIp = await getCurrentIp();
 
-  if (currentCidrIp !== `${currentIp}/32`) {
-    await updateIp(currentCidrIp, currentIp);
+  let updated = false;
+  await Promise.all(currentValues.map(async (currentValue) => {
+    if (currentValue.CidrIp !== `${currentIp}/32`) {
+      await updateIp(currentValue, currentIp);
+      updated = true;
+    }
+  }));
+
+  if (updated) {
     console.log('IP Updated');
   }
   console.log(`Current IP: ${currentIp}`);
